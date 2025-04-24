@@ -30,7 +30,7 @@ int subscribe(Queue *q);
 void unsubscribe(Queue *q, int pipe_id);
 bool enqueue(Pipe *p, int pipe_id, int item, Queue *parent_q);
 bool dequeue(Queue *q, int *item);
-int dequeue_batch(Queue *q, int *items, int max_items);  
+int dequeue_batch(Queue *q, int *items, size_t max_items);  
 void print_queue(Queue *q);
 
 #endif

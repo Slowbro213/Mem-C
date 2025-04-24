@@ -6,11 +6,10 @@
 #include <stdlib.h>
 #include "../lib/queue.h"
 
-#define NUM_PRODUCERS (1 << 2)  // 4 producers
-#define ITEMS_PER_PRODUCER (1 << 20)  // 1,048,576 items per producer
+#define NUM_PRODUCERS (1 << 3)  
+#define ITEMS_PER_PRODUCER (1 << 20) // items per producer
 #define TOTAL_ITEMS (NUM_PRODUCERS * ITEMS_PER_PRODUCER)
 
-// Global counter for consumed items
 _Atomic int consumed_count = 0;
 
 typedef struct {
@@ -18,12 +17,10 @@ typedef struct {
     int pipe_id;
 } ProducerArgs;
 
-// Producer: Enqueue items to dedicated pipe
 int producer(void *arg) {
     ProducerArgs *args = (ProducerArgs *)arg;
     for (int i = 0; i < ITEMS_PER_PRODUCER; i++) {
         int item = i + (args->pipe_id * ITEMS_PER_PRODUCER);
-        // Spin until enqueue succeeds (simulate backpressure)
         while(!enqueue(&args->q->pipes[args->pipe_id], args->pipe_id, item, args->q)) {
             thrd_yield();
         }
@@ -31,7 +28,6 @@ int producer(void *arg) {
     return 0;
 }
 
-// Consumer test 1: Single-item dequeue loop
 int consumer_single(void *arg) {
     Queue *q = (Queue *)arg;
     while (atomic_load(&consumed_count) < TOTAL_ITEMS) {
@@ -45,10 +41,9 @@ int consumer_single(void *arg) {
     return 0;
 }
 
-// Consumer test 2: Batch dequeue loop
 int consumer_batch(void *arg) {
     Queue *q = (Queue *)arg;
-    const int BATCH_SIZE = 64;
+    const size_t BATCH_SIZE = (1 << 10); 
     int batch[BATCH_SIZE];
     
     while (atomic_load(&consumed_count) < TOTAL_ITEMS) {
@@ -62,9 +57,7 @@ int consumer_batch(void *arg) {
     return 0;
 }
 
-// Run one test scenario: 'mode' == 0 for single dequeue, 1 for batch dequeue.
 void run_test(int mode) {
-    // Reset global consumed counter.
     atomic_store(&consumed_count, 0);
     
     Queue q;
@@ -72,18 +65,15 @@ void run_test(int mode) {
     thrd_t producers[NUM_PRODUCERS], consumer_thread;
     ProducerArgs args[NUM_PRODUCERS];
     
-    // Subscribe producers and set up arguments.
     for (int i = 0; i < NUM_PRODUCERS; i++) {
         args[i].pipe_id = subscribe(&q);
         args[i].q = &q;
     }
     
-    // Start the producers.
     for (int i = 0; i < NUM_PRODUCERS; i++) {
         thrd_create(&producers[i], producer, &args[i]);
     }
     
-    // Choose the consumer based on the mode.
     if (mode == 0) {
         thrd_create(&consumer_thread, consumer_single, &q);
         printf("Running single-item dequeue test...\n");
@@ -95,10 +85,8 @@ void run_test(int mode) {
     struct timespec start, end;
     clock_gettime(CLOCK_MONOTONIC, &start);
     
-    // Wait for all producers to finish.
     for (int i = 0; i < NUM_PRODUCERS; i++) {
         thrd_join(producers[i], NULL);
-        // Unsubscribe after the producer is done.
         unsubscribe(&q, args[i].pipe_id);
     }
     thrd_join(consumer_thread, NULL);
@@ -126,9 +114,7 @@ void run_test(int mode) {
 }
 
 int main(void) {
-    // Run single-item test.
     run_test(0);
-    // Run batch dequeue test.
     run_test(1);
     
     return 0;

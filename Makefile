@@ -4,6 +4,7 @@ CFLAGS := -Wall -Wextra -I./lib -fPIC
 LDFLAGS := -L./lib
 AR := ar
 ARFLAGS := rcs
+FAST := -Ofast
 
 # Directories
 SRC_DIR := src
@@ -48,6 +49,10 @@ $(TARGET_LIB): $(QUEUE_OBJ) | $(LIB_DIR)
 
 # Clean
 clean:
-	rm -rf $(OBJ_DIR)/* $(BIN_DIR)/* $(LIB_DIR)/*.a
+	rm -rf $(OBJ_DIR) $(BIN_DIR) $(LIB_DIR)/*.a
+
+
+run: all
+	./$(TARGET_BIN)
 
 .PHONY: all clean

@@ -64,15 +64,34 @@ bool dequeue(Queue *q, int *item) {
     return false;
 }
 
-int dequeue_batch(Queue *q, int *items, int max_items) {
-    int count = 0;
-    while (count < max_items) {
-        int item;
-        if (!dequeue(q, &item))
-            break;
-        items[count++] = item;
+int dequeue_batch(Queue *q, int *items, size_t max_items) {
+  if (atomic_load(&q->global_count) == 0) return false;
+
+  int start = (q->last_dequeued_pipe + 1) % MAX_PIPES;
+  for (int i = 0; i < MAX_PIPES; i++) {
+    int id = (start + i) % MAX_PIPES;
+    if (atomic_load_explicit(&q->valid_mask, memory_order_acquire) & (1ULL << id)) {
+      Pipe *p = &q->pipes[id];
+      size_t count = atomic_load(&p->count);
+      //Dequeue items in batches 
+      size_t items_to_dequeue = count < max_items ? count : max_items;
+      for (size_t j = 0; j < items_to_dequeue; j++) {
+        items[j] = p->numbers[p->head];
+        p->head = (p->head + 1) % QUEUE_SIZE;
+      }
+      if (count == items_to_dequeue && !(atomic_load(&q->active_mask) & (1ULL << id))) {
+        atomic_fetch_and_explicit(&q->valid_mask, ~(1ULL << id), memory_order_release);
+      }
+      atomic_fetch_sub(&p->count, items_to_dequeue);
+      atomic_fetch_sub(&q->global_count, items_to_dequeue);
+      q->last_dequeued_pipe = id;
+      return items_to_dequeue;
+
+
     }
-    return count;
+  }
+  return false;
+
 }
 
 void unsubscribe(Queue *q, int pipe_id) {
